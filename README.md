@@ -26,6 +26,7 @@ go run ./03-methods   # methods, value vs pointer receivers
 go run ./04-wallet    # the Wallet exercise
 go run ./05-startup   # what runs before main(), and in what order
 go run ./06-modules   # go.mod, go.sum, and a real dependency
+go run ./07-errors    # errors as values: the wallet, done idiomatically
 ```
 
 ## Lessons
@@ -38,6 +39,39 @@ go run ./06-modules   # go.mod, go.sum, and a real dependency
 | `04-wallet` | `Wallet` struct with `Deposit`, `Withdraw`, and `Display` |
 | `05-startup` | the compile-then-run pipeline, package init order, `init()`, `main()` |
 | `06-modules` | modules, `go.mod` vs `go.sum`, direct vs indirect dependencies |
+| `07-errors` | errors as values, sentinel errors, custom error types, wrapping, `errors.Is` / `errors.As` |
+
+## Errors are values
+
+Go has no exceptions. `error` is an ordinary interface — anything with an
+`Error() string` method satisfies it — and failures are returned, not thrown:
+
+```go
+func (w *Wallet) Withdraw(amount float64) error {
+    if amount > w.Balance {
+        return fmt.Errorf("withdraw from wallet %d: %w", w.ID,
+            &InsufficientFundsError{Requested: amount, Available: w.Balance})
+    }
+    w.Balance -= amount
+    return nil // nil means success
+}
+```
+
+`07-errors` rewrites the wallet this way. The pieces:
+
+- **Sentinel errors** (`var ErrInvalidAmount = errors.New(...)`) — fixed values for
+  failures the caller identifies by identity.
+- **Custom error types** — a struct with an `Error() string` method, for when the
+  caller needs *data* about the failure (how much they were short by).
+- **`%w` wrapping** — `fmt.Errorf("...: %w", err)` adds context while keeping the
+  original retrievable. `%v` would flatten it to text and lose it.
+- **`errors.Is(err, target)`** — "is that specific error anywhere in the chain?"
+  Use it instead of `==`, which fails on wrapped errors.
+- **`errors.As(err, &target)`** — "is there an error of this type in the chain?"
+  and hands you the struct so you can read its fields.
+
+Libraries return errors; they never print them. Printing is the caller's decision.
+`panic` is for unrecoverable bugs, not for a user entering a bad number.
 
 ## How a Go program starts
 
