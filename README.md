@@ -7,10 +7,12 @@ demonstrated by code that actually prints the result, rather than described in p
 
 ## Requirements
 
-Go 1.21+ (built with go1.26.5). No external dependencies — standard library only.
+Go 1.21+ (built with go1.26.5). One third-party dependency (`rsc.io/quote`), used
+only by `06-modules` to demonstrate how `go.mod` and `go.sum` work.
 
 ```bash
 go version
+go mod download   # fetch dependencies
 ```
 
 ## Running the lessons
@@ -22,6 +24,8 @@ go run ./01-basics    # variables, int, float64, bool, strings
 go run ./02-structs   # structs, custom types, initialization, value semantics
 go run ./03-methods   # methods, value vs pointer receivers
 go run ./04-wallet    # the Wallet exercise
+go run ./05-startup   # what runs before main(), and in what order
+go run ./06-modules   # go.mod, go.sum, and a real dependency
 ```
 
 ## Lessons
@@ -32,6 +36,60 @@ go run ./04-wallet    # the Wallet exercise
 | `02-structs` | defining a struct, custom types, four ways to initialize, structs are copied on assignment |
 | `03-methods` | methods and receivers, value vs pointer receivers, memory addresses proving the difference |
 | `04-wallet` | `Wallet` struct with `Deposit`, `Withdraw`, and `Display` |
+| `05-startup` | the compile-then-run pipeline, package init order, `init()`, `main()` |
+| `06-modules` | modules, `go.mod` vs `go.sum`, direct vs indirect dependencies |
+
+## How a Go program starts
+
+Go is **compiled ahead of time to native machine code**. Nothing reads the `.go`
+files at runtime — by the time the program runs, the source is irrelevant.
+
+```
+your .go files
+   │  go build: parse → type-check → optimize → machine code
+   ▼
+compiled packages
+   │  link: bundle with the Go runtime (GC, scheduler, allocator)
+   ▼
+one self-contained binary
+   │  OS exec: loads it, jumps to the RUNTIME entry point (not your main)
+   ▼
+runtime setup → package init → main.main() → exit when main returns
+```
+
+Package initialization, which `05-startup` prints in order:
+
+1. imported packages are fully initialized first, dependencies deepest-first
+2. within a package: package-level `var`s, then `init()` functions in source order
+3. only then does `main()` run
+4. when `main()` **returns, the process exits immediately** — it does not wait for
+   anything still running in the background
+
+Because it compiles first, a type error stops the whole program from building —
+no part of it runs, not even lines above the mistake.
+
+## go.mod and go.sum
+
+| File | Purpose |
+| --- | --- |
+| `go.mod` | the module's name, its Go version, and what it depends on. Hand-editable. Commit it. |
+| `go.sum` | cryptographic checksums of the exact dependency content that was downloaded. Generated, never hand-edited. Commit it too. |
+
+`go.sum` is not a lockfile — `go.mod` already pins exact versions. `go.sum` is a
+tamper check: if a published version's bytes ever change, the build fails instead of
+silently using different code. Dependencies marked `// indirect` are things your
+dependencies need, not things you imported yourself.
+
+Useful commands:
+
+```bash
+go mod init <name>   # create go.mod
+go mod tidy          # add what's imported, drop what isn't, refresh go.sum
+go get <pkg>@<ver>   # add or upgrade one dependency
+go build ./...       # compile everything
+go vet ./...         # report suspicious code the compiler still accepts
+gofmt -l .           # list files that aren't formatted canonically
+```
 
 ## The Wallet exercise
 
