@@ -1,0 +1,12 @@
+# Binaries
+*.exe
+*.test
+*.out
+learn-go
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
